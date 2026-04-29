@@ -45,7 +45,7 @@ EMAIL_FROM = os.environ.get("EMAIL_FROM", SMTP_USER)
 EMAIL_TO = os.environ.get("EMAIL_TO")
 
 REPORT_TITLE = os.environ.get("REPORT_TITLE", "Etimad Tenders – Daily Report")
-MAX_ROWS = int(os.environ.get("MAX_ROWS", "6"))
+MAX_ROWS = int(os.environ.get("MAX_ROWS", "50"))
 
 COMPANY_NAME = os.environ.get("COMPANY_NAME", "")
 LOGO_PATH = os.environ.get("LOGO_PATH")
@@ -418,7 +418,8 @@ def build_pdf(rows, path):
                 ("RIGHTPADDING", (0, 0), (-1, -1), 3),
                 ("TOPPADDING", (0, 0), (-1, -1), 4),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.red),
+                ("GRID", (0, 0), (-1, 0), 0.5, colors.white),
+                ("GRID", (0, 1), (-1, -1), 0.5, colors.red),
                 ("BOX", (0, 0), (-1, -1), 0.5, colors.red),
                 ("LINEABOVE", (0, 0), (-1, 0), 0.5, colors.white),
                 ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.white),
