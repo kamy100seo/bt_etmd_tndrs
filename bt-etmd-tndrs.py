@@ -27,9 +27,17 @@ from reportlab.pdfgen import canvas
 from dotenv import load_dotenv
 from deep_translator import GoogleTranslator
 
-# Load .env from current directory
-dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
-load_dotenv(dotenv_path)
+# Keywords for relevant services
+RELEVANT_KEYWORDS = {
+    'accommodation': ['accommodation', 'hotel', 'resort', 'lodging', 'housing', 'apartment', 'villa', 'guesthouse'],
+    'catering': ['catering', 'food', 'restaurant', 'meal', 'dining', 'kitchen', 'cook', 'chef'],
+    'construction': ['construction', 'building', 'contractor', 'renovation', 'repair', 'maintenance', 'infrastructure', 'civil', 'engineering'],
+    'it_software': ['software', 'it', 'development', 'programming', 'ai', 'artificial intelligence', 'e-commerce', 'website', 'app', 'digital', 'tech'],
+    'logistics': ['logistics', 'transportation', 'rental', 'machinery', 'heavy duty', 'equipment', 'vehicle', 'truck', 'crane'],
+    'recruitment': ['recruitment', 'manpower', 'staff', 'personnel', 'hr', 'human resources', 'employment', 'hiring'],
+    'travel_tourism': ['travel', 'tourism', 'hajj', 'umrah', 'pilgrimage', 'tour', 'agency', 'booking'],
+    'textile': ['textile', 'fabric', 'manufacturing', 'garment', 'cloth', 'home textile', 'bedding', 'curtain']
+}
 
 # Configuration from environment
 TARGET_URL = os.environ.get(
@@ -54,11 +62,23 @@ FOOTER_TEXT = os.environ.get(
     "",
 )
 
-# Initialize translator
+
 def clean_text(text):
     if not text:
         return ""
     return re.sub(r"\s+", " ", text).strip()
+
+
+def is_relevant_tender(row):
+    """Check if a tender row is relevant based on keywords in title and activity."""
+    title = row[0].lower() if row[0] else ""
+    activity = row[4].lower() if len(row) > 4 and row[4] else ""
+    text = title + " " + activity
+    
+    for category, keywords in RELEVANT_KEYWORDS.items():
+        if any(keyword in text for keyword in keywords):
+            return True
+    return False
 
 
 def get_text_by_label(card, label_patterns):
@@ -488,6 +508,12 @@ def main():
     print("🌐 Translating to English...")
     rows = translate_rows(rows)
     print("✅ Translation complete")
+    
+    # Filter relevant tenders
+    print("🔍 Filtering relevant tenders...")
+    original_count = len(rows)
+    rows = [row for row in rows if is_relevant_tender(row)]
+    print(f"✅ Filtered to {len(rows)} relevant tenders (from {original_count})")
     
     today = datetime.now().strftime("%Y%m%d")
     pdf_name = f"bt_etmd_tndrs_{today}.pdf"
