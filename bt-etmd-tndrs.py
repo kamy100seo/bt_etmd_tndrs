@@ -309,7 +309,7 @@ def add_footer(canvas_obj: canvas.Canvas, doc):
 
     if FOOTER_TEXT:
         canvas_obj.setStrokeColor(colors.red)
-        canvas_obj.setLineWidth(0.3)
+        canvas_obj.setLineWidth(0.5)
         canvas_obj.line(0, line_y, width, line_y)
 
         footer_style = getSampleStyleSheet()["Normal"].clone('footer')
@@ -418,10 +418,10 @@ def build_pdf(rows, path):
                 ("RIGHTPADDING", (0, 0), (-1, -1), 3),
                 ("TOPPADDING", (0, 0), (-1, -1), 4),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-                ("GRID", (0, 0), (-1, -1), 0.3, colors.red),
-                ("BOX", (0, 0), (-1, -1), 0.3, colors.red),
-                ("LINEABOVE", (0, 0), (-1, 0), 0.3, colors.white),
-                ("LINEBELOW", (0, 0), (-1, 0), 0.3, colors.white),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.red),
+                ("BOX", (0, 0), (-1, -1), 0.5, colors.red),
+                ("LINEABOVE", (0, 0), (-1, 0), 0.5, colors.white),
+                ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.white),
             ]
         )
     )
