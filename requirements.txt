@@ -1,0 +1,5 @@
+playwright==1.40.0
+beautifulsoup4==4.12.2
+reportlab==4.0.7
+python-dotenv==1.0.0
+deep-translator==1.11.4
