@@ -5,4 +5,4 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 # Use the virtualenv Python interpreter directly.
-.venv/bin/python bt-etmd-tndrs.py >> "$(pwd)/bt_etmd_tndrs_cron.log" 2>&1
+.venv/bin/python bt-etmd-tndrs.py >> "$(pwd)/bt_tndrs_etimad_cron.log" 2>&1

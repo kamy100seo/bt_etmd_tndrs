@@ -27,6 +27,9 @@ from reportlab.pdfgen import canvas
 from dotenv import load_dotenv
 from deep_translator import GoogleTranslator
 
+# Load environment variables from .env if present
+load_dotenv()
+
 # Keywords for relevant services
 RELEVANT_KEYWORDS = {
     'accommodation': ['accommodation', 'hotel', 'resort', 'lodging', 'housing', 'apartment', 'villa', 'guesthouse'],
@@ -516,7 +519,7 @@ def main():
     print(f"✅ Filtered to {len(rows)} relevant tenders (from {original_count})")
     
     today = datetime.now().strftime("%Y%m%d")
-    pdf_name = f"bt_etmd_tndrs_{today}.pdf"
+    pdf_name = f"bt_tndrs_etimad_{today}.pdf"
     print(f"📄 Building PDF: {pdf_name}")
     build_pdf(rows, pdf_name)
     

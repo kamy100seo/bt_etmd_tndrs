@@ -20,8 +20,8 @@ This Python script scrapes daily tenders from the Etimad platform, generates a P
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/kamy100seo/bt_etmd_tndrs.git
-   cd bt_etmd_tndrs
+   git clone https://github.com/kamy100seo/bt_etmd_tndrs.git bt_tndrs_etimad
+   cd bt_tndrs_etimad
    ```
 
 2. Create and activate virtual environment:
@@ -59,30 +59,32 @@ python bt-etmd-tndrs.py
 ```
 
 ### Scheduled Execution
-Use the provided shell script with cron:
+Use the provided shell script with cron to run the report three times per day:
 
 ```bash
 # Edit crontab
 crontab -e
 
-# Add this line for daily execution at 10:30 AM
-30 10 * * * /path/to/bt_etmd_tndrs/run_etimad_report.sh
+# Add these lines to run at 10:00, 12:00, and 14:00
+0 10 * * * /path/to/bt_tndrs_etimad/run_etimad_report.sh
+0 12 * * * /path/to/bt_tndrs_etimad/run_etimad_report.sh
+0 14 * * * /path/to/bt_tndrs_etimad/run_etimad_report.sh
 ```
 
 ## Project Structure
 
 ```
-bt-etmd-tndrs/
+bt_tndrs_etimad/
 ├── bt-etmd-tndrs.py          # Main script
 ├── run_etimad_report.sh      # Cron execution script
-├── requirements.txt           # Python dependencies
-├── .env                       # Environment variables (not in repo)
-├── .gitignore                 # Git ignore rules
+├── requirements.txt          # Python dependencies
+├── .env                      # Environment variables (not in repo)
+├── .gitignore                # Git ignore rules
 ├── images/
-│   └── iicc_final_logo.jpeg   # Company logo
+│   └── iicc_final_logo.jpeg  # Company logo
 └── .github/
     └── workflows/
-        └── ci.yml             # GitHub Actions CI/CD
+        └── ci.yml            # GitHub Actions CI/CD
 ```
 
 ## CI/CD
