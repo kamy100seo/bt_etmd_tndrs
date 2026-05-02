@@ -6,8 +6,6 @@ import ssl
 import asyncio
 import json
 import shutil
-import calendar
-from pypdf import PdfWriter
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 from email.mime.text import MIMEText
@@ -51,7 +49,6 @@ TARGET_URL = os.environ.get(
     "TARGET_URL",
     "https://tenders.etimad.sa/Tender/AllTendersForVisitor?PageNumber=1",
 )
-
 SMTP_HOST = os.environ.get("SMTP_HOST")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 SMTP_USER = os.environ.get("SMTP_USER")
@@ -104,188 +101,52 @@ def get_text_by_label(card, label_patterns):
     return ""
 
 
-def get_text_from_selectors(card, selectors):
-    for selector in selectors:
-        node = card.select_one(selector)
-        if node and node.text.strip():
-            return clean_text(node.text)
-    return ""
-
-
-def arabic_digits_to_ascii(text):
-    if not text:
-        return text
-    trans = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
-    return text.translate(trans)
-
-
-def parse_date(value):
-    if not value:
-        return None
-    text = arabic_digits_to_ascii(clean_text(value)).replace('/', '-').replace('.', '-').replace('\u200f', '').strip()
-    patterns = [
-        '%Y-%m-%d',
-        '%d-%m-%Y',
-        '%d %b %Y',
-        '%d %B %Y',
-        '%d %b, %Y',
-        '%d %B, %Y',
-        '%Y-%m-%d %H:%M',
-        '%d-%m-%Y %H:%M',
-    ]
-    for pattern in patterns:
-        try:
-            return datetime.strptime(text, pattern)
-        except Exception:
-            continue
-    return None
-
-
-def sort_rows(rows):
-    def sort_key(row):
-        pub_date = parse_date(row[6])
-        return pub_date or datetime.min
-
-    return sorted(rows, key=sort_key, reverse=True)
-
-
-def is_heading_row(values):
-    normalized = [clean_text(str(v)).lower() for v in values if v]
-    headings = {
-        'tender title',
-        'procuring entity',
-        'sub-entity',
-        'sub-entity / dept',
-        'type',
-        'activity',
-        'ref no.',
-        'publication',
-        'inquiry deadline',
-        'submission deadline',
-        'opening',
-        'doc price',
-        'procuring agency',
-    }
-    return any(value in headings for value in normalized)
-
-
-translator = GoogleTranslator(source='ar', target='en')
-
-
-def translate_arabic_to_english(text):
-    """Translate Arabic text to English using Google Translate."""
-    if not text or not any('\u0600' <= char <= '\u06FF' for char in text):
-        return text  # Return as-is if no Arabic characters
-    
-    try:
-        translated = translator.translate(text)
-        return translated
-    except Exception as e:
-        print(f"Translation error for '{text}': {e}")
-        return text  # Return original text if translation fails
+async def fetch_rows():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch()
+        page = await browser.new_page()
+        await page.goto(TARGET_URL)
+        await page.wait_for_load_state('networkidle')
+        
+        # Wait for the table to load
+        await page.wait_for_selector('table', timeout=30000)
+        
+        # Extract table rows
+        rows = []
+        table_rows = await page.query_selector_all('table tbody tr')
+        
+        for tr in table_rows[:MAX_ROWS]:
+            cells = await tr.query_selector_all('td')
+            row_data = []
+            for cell in cells:
+                text = await cell.inner_text()
+                row_data.append(clean_text(text))
+            if row_data:
+                rows.append(row_data)
+        
+        await browser.close()
+        return rows
 
 
 def translate_rows(rows):
-    """Translate all Arabic text in the rows to English."""
+    translator = GoogleTranslator(source='auto', target='en')
     translated_rows = []
     for row in rows:
         translated_row = []
         for cell in row:
-            translated_cell = translate_arabic_to_english(cell)
-            translated_row.append(translated_cell)
+            if cell:
+                try:
+                    translated_cell = translator.translate(cell)
+                    translated_row.append(translated_cell)
+                except:
+                    translated_row.append(cell)
+            else:
+                translated_row.append(cell)
         translated_rows.append(translated_row)
     return translated_rows
 
 
-def fetch_rows():
-    """Scrape Etimad tenders using Playwright (handles JavaScript rendering)."""
-    if not TARGET_URL:
-        raise RuntimeError("TARGET_URL is not set")
-
-    # Run async function in sync context
-    return asyncio.run(_fetch_rows_async())
-
-
-async def _fetch_rows_async():
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        # Use a real browser user agent to avoid bot detection
-        context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        )
-        page = await context.new_page()
-        
-        try:
-            await page.goto(TARGET_URL, wait_until='load', timeout=60000)
-            
-            # Wait for the tender cards to actually appear
-            await page.wait_for_selector('.card', state='attached', timeout=20000)
-            
-            content = await page.content()
-            soup = BeautifulSoup(content, 'html.parser')
-            
-            # Find real tender cards only
-            cards = soup.select('.tender-card')[:MAX_ROWS]
-            formatted_rows = []
-
-            for card in cards:
-                title = card.select_one('h3 a, h3, .tender-name, [id*="tenderName"], .card-title, .title, .tender-title')
-                title_text = clean_text(title.text) if title else ''
-                if not title_text:
-                    continue
-
-                # Entity and sub-entity come from the same paragraph block
-                entity_text = ''
-                sub_entity_text = ''
-                paragraph = card.select_one('p.pb-2')
-                if paragraph:
-                    parts = [clean_text(s) for s in paragraph.strings if clean_text(s)]
-                    if parts:
-                        entity_text = parts[0]
-                    if len(parts) > 1:
-                        sub_entity_text = parts[1]
-
-                tender_type = get_text_from_selectors(
-                    card,
-                    ['span.badge', '.badge', '.tender-type', '.category', '.tender-category'],
-                ) or get_text_by_label(card, ['نوع المنافسة', 'نوع', 'Type'])
-
-                activity_text = get_text_from_selectors(card, ['.text-chart-indicator'])
-                if not activity_text:
-                    activity_text = get_text_by_label(card, ['النشاط الأساسي', 'Activity'])
-
-                ref_val = get_text_by_label(card, ['الرقم المرجعي', 'Reference', 'Ref no', 'Ref.'])
-                pub_date = get_text_by_label(card, ['تاريخ النشر', 'Publication'])
-                inquiry_deadline = get_text_by_label(card, ['آخر موعد لإستلام الإستفسارات', 'Inquiry deadline', 'Inquiry'])
-                submit_date = get_text_by_label(card, ['آخر موعد لتقديم العروض', 'Submission deadline', 'Submission'])
-                opening_date = get_text_by_label(card, ['تاريخ ووقت فتح العروض', 'موعد فتح العروض', 'Opening'])
-                price = get_text_by_label(card, ['قيمة وثائق المنافسة', 'قيمة كراسة الشروط', 'Doc price', 'Price', 'Document price'])
-
-                row = [
-                    title_text,
-                    entity_text or 'N/A',
-                    sub_entity_text or '',
-                    tender_type or 'General',
-                    activity_text or 'General',
-                    ref_val,
-                    pub_date,
-                    inquiry_deadline,
-                    submit_date,
-                    opening_date,
-                    price,
-                ]
-
-                formatted_rows.append(row)
-
-            formatted_rows = sort_rows(formatted_rows)
-            return formatted_rows
-
-        finally:
-            await browser.close()
-
-
-
-def draw_page_header(canvas_obj: canvas.Canvas, doc):
+def draw_page_header(canvas_obj, doc):
     """Draw the company logo and name in the page header."""
     width, height = doc.pagesize
     top_y = height - 16 * mm
@@ -336,7 +197,7 @@ def draw_page_header(canvas_obj: canvas.Canvas, doc):
     canvas_obj.setFillColor(colors.black)  # Reset color
 
 
-def add_footer(canvas_obj: canvas.Canvas, doc):
+def add_footer(canvas_obj, doc):
     """Draw red separator line and footer text on each page."""
     width, _ = doc.pagesize
     line_y = 15 * mm
@@ -487,7 +348,7 @@ def send_email(pdf_path):
 
     now = datetime.now().strftime("%Y-%m-%d")
     subject = f"{REPORT_TITLE} – {now}"
-    body = "Attached is today’s generated report in PDF format."
+    body = "Attached is today's generated report in PDF format."
 
     msg = MIMEMultipart()
     msg["From"] = EMAIL_FROM
@@ -511,102 +372,11 @@ def send_email(pdf_path):
         server.send_message(msg)
 
 
-def main():
-    print("🔄 Starting Etimad tenders scraper...")
-    
-    # Load previously reported tenders
-    reported_file = 'reported_tenders.json'
-    if os.path.exists(reported_file):
-        with open(reported_file, 'r') as f:
-            reported = json.load(f)
-    else:
-        reported = {}
-    
-    rows = fetch_rows()
-    if not rows:
-        print("❌ No rows scraped; aborting.")
-        return
-
-    print(f"✅ Scraped {len(rows)} tenders")
-    
-    # Translate Arabic text to English
-    print("🌐 Translating to English...")
-    rows = translate_rows(rows)
-    print("✅ Translation complete")
-    
-    # Filter relevant tenders
-    print("🔍 Filtering relevant tenders...")
-    original_count = len(rows)
-    rows = [row for row in rows if is_relevant_tender(row)]
-    print(f"✅ Filtered to {len(rows)} relevant tenders (from {original_count})")
-    
-    # Add new tenders without duplicates
-    new_count = 0
-    for row in rows:
-        ref_no = row[6] if len(row) > 6 and row[6] else str(hash(str(row)))  # fallback to hash if no ref_no
-        if ref_no not in reported:
-            reported[ref_no] = row
-            new_count += 1
-    
-    all_rows = list(reported.values())
-    print(f"✅ Added {new_count} new tenders, total {len(all_rows)} reported tenders")
-    
-    # Save updated reported tenders
-    with open(reported_file, 'w') as f:
-        json.dump(reported, f, indent=2)
-    
-    today = datetime.now().strftime("%Y%m%d")
-    pdf_name = f"tenders_report_{today}.pdf"
-    print(f"📄 Building PDF: {pdf_name}")
-    build_pdf(all_rows, pdf_name)
-    
-    print(f"✉️ Sending email with PDF...")
-    send_email(pdf_name)
-    print(f"✅ Done! Report sent to {EMAIL_TO}")
-    
-    # Save third report for monthly compilation
-    now = datetime.now()
-    if now.hour == 15:
-        monthly_dir = 'monthly_reports'
-        os.makedirs(monthly_dir, exist_ok=True)
-        monthly_pdf = os.path.join(monthly_dir, f"tenders_report_{now.strftime('%Y%m%d')}_final.pdf")
-        shutil.copy(pdf_name, monthly_pdf)
-        print(f"📁 Saved final daily report for monthly: {monthly_pdf}")
-        
-        # Check if it's month end and compile monthly report
-        last_day = calendar.monthrange(now.year, now.month)[1]
-        if now.day == last_day:
-            print("📊 Compiling monthly report...")
-            merger = PdfWriter()
-            month_pattern = f"tenders_report_{now.strftime('%Y%m')}*_final.pdf"
-            final_pdfs = [f for f in os.listdir(monthly_dir) if f.startswith(f"tenders_report_{now.strftime('%Y%m')}") and f.endswith('_final.pdf')]
-            final_pdfs.sort()
-            for pdf in final_pdfs:
-                merger.append(os.path.join(monthly_dir, pdf))
-            monthly_compiled = os.path.join(monthly_dir, f"monthly_tenders_report_{now.strftime('%Y%m')}.pdf")
-            merger.write(monthly_compiled)
-            merger.close()
-            print(f"📄 Monthly report compiled: {monthly_compiled}")
-            
-            # Send monthly report email
-            monthly_subject = f"Monthly Tenders Report – {now.strftime('%B %Y')}"
-            monthly_body = f"Attached is the compiled monthly tenders report for {now.strftime('%B %Y')}."
-            msg = MIMEMultipart()
-            msg["From"] = EMAIL_FROM
-            msg["To"] = EMAIL_TO
-            msg["Subject"] = monthly_subject
-            msg.attach(MIMEText(monthly_body, "plain"))
-            with open(monthly_compiled, "rb") as f:
-                part = MIMEApplication(f.read(), _subtype="pdf")
-                part.add_header("Content-Disposition", "attachment", filename=os.path.basename(monthly_compiled))
-                msg.attach(part)
-            context = ssl.create_default_context()
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-                server.starttls(context=context)
-                server.login(SMTP_USER, SMTP_PASS)
-                server.send_message(msg)
-            print(f"✉️ Monthly report sent to {EMAIL_TO}")
-
-
 if __name__ == "__main__":
-    main()
+    # Sample data for preview
+    sample_rows = [
+        ['Sample Tender 1', 'Entity 1', 'Dept 1', 'Type 1', 'Activity 1', 'Ref 1', '2024-01-01', '2024-01-02', '2024-01-03', '2024-01-04', '100 SAR'],
+        ['Sample Tender 2', 'Entity 2', 'Dept 2', 'Type 2', 'Activity 2', 'Ref 2', '2024-01-01', '2024-01-02', '2024-01-03', '2024-01-04', '200 SAR'],
+    ]
+    build_pdf(sample_rows, 'preview_report.pdf')
+    print('Preview PDF generated: preview_report.pdf')

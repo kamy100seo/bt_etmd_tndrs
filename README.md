@@ -65,10 +65,10 @@ Use the provided shell script with cron to run the report three times per day:
 # Edit crontab
 crontab -e
 
-# Add these lines to run at 10:00, 12:00, and 14:00
+# Add these lines to run at 10:00 AM, 01:00 PM, and 03:00 PM
 0 10 * * * /path/to/bt_tndrs_etimad/run_etimad_report.sh
-0 12 * * * /path/to/bt_tndrs_etimad/run_etimad_report.sh
-0 14 * * * /path/to/bt_tndrs_etimad/run_etimad_report.sh
+0 13 * * * /path/to/bt_tndrs_etimad/run_etimad_report.sh
+0 15 * * * /path/to/bt_tndrs_etimad/run_etimad_report.sh
 ```
 
 ## Project Structure
