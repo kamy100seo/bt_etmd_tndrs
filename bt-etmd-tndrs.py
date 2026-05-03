@@ -76,15 +76,26 @@ def clean_text(text):
     return re.sub(r"\s+", " ", text).strip()
 
 
-def is_relevant_tender(row):
-    """Check if a tender row is relevant based on keywords in title and activity."""
-    title = row[0].lower() if row[0] else ""
-    activity = row[4].lower() if len(row) > 4 and row[4] else ""
-    text = title + " " + activity
+def extract_activity_days(activity_text):
+    """Extract numeric days value from activity text (e.g., '8 days' -> 8)."""
+    if not activity_text:
+        return 0
     
-    for category, keywords in RELEVANT_KEYWORDS.items():
-        if any(keyword in text for keyword in keywords):
-            return True
+    # Extract numbers from the activity text
+    numbers = re.findall(r'\d+', str(activity_text))
+    if numbers:
+        try:
+            return int(numbers[0])
+        except (ValueError, IndexError):
+            return 0
+    return 0
+
+
+def is_relevant_tender(row):
+    """Check if a tender has activity value >= 8 days."""
+    if len(row) > 4 and row[4]:
+        activity_days = extract_activity_days(row[4])
+        return activity_days >= 8
     return False
 
 
@@ -444,16 +455,14 @@ def build_pdf(rows, path):
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
                 ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
                 ("FONTSIZE", (0, 0), (-1, 0), 8),
-                ("FONTSIZE", (0, 1), (-1, -1), 7),
+                ("FONTSIZE", (0, 1), (-1, -1), 8),
                 ("ALIGN", (0, 0), (-1, 0), "CENTER"),
-                ("ALIGN", (0, 1), (0, -1), "CENTER"),
-                ("ALIGN", (1, 1), (4, -1), "LEFT"),
-                ("ALIGN", (5, 1), (-1, -1), "CENTER"),
+                ("ALIGN", (0, 1), (-1, -1), "CENTER"),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 2),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 2),
-                ("TOPPADDING", (0, 0), (-1, -1), 3),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                ("LEFTPADDING", (0, 0), (-1, -1), 1),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 1),
+                ("TOPPADDING", (0, 0), (-1, -1), 2),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
                 ("GRID", (0, 0), (-1, 0), 0.5, colors.white),
                 ("GRID", (0, 1), (-1, -1), 0.5, colors.red),
                 ("BOX", (0, 0), (-1, -1), 0.5, colors.red),
